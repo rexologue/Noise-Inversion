@@ -2,24 +2,26 @@
 #
 # Script for training target model
 
-from executors.trainer import ImageClassifierTrainer
+from trainer import ImageClassifierTrainer
 
-model_name   = ['resnet50', 'resnet101', 'resnet152', 'ir50', 'ir101', 'ir152', 'vgg16'][1]
-dataset_name = ['food101', 'caltech256', 'stfd_dogs'][0]
+model_name    = ['resnet50', 'resnet101', 'resnet152', 'ir50', 'ir101', 'ir152', 'vgg16'][0]
+dataset_stats = ['food101', 'caltech256', 'stfd_dogs', 'imagenet'][3]
+dataset_name  = ['food101', 'caltech256', 'stfd_dogs'][0]
 
 num_classes  = {'food101': 101, 'caltech256': 257, 'stfd_dogs': 120}[dataset_name]
 
-annotation_path = '/home/super/mironov/mia/annotations/food-101_annotation.parquet'
-pretrained_path = None #'/home/super/mironov/mia/logs/resnet101_food101.pth'
-checkpoint_path = '/home/super/mironov/mia/logs/checkpoints/step_40000.pth'
+annotation_path = '/home/duka/job/noise_inversion/annotations/Food101_annotation.parquet'
+pretrained_path = '/home/duka/job/noise_inversion/logs/resnet50_food101.pth'
+checkpoint_path = None
 initialize      = False
 
 num_epochs      = 1000
 batch_size      = 256
 weight_decay    = 2e-5
 learning_rate   = 1e-4
-log_path        = '/home/super/mironov/mia/logs'
+log_path        = '/home/duka/job/noise_inversion/logs'
 image_mix_prob  = 0.4
+noise_prob      = 0.2
 
 validate_every_n_batches = 1000
 
@@ -29,13 +31,23 @@ scheduler_opts = {
     'eta_min': 1e-5,
 }
 
+noise_signer_ops = {
+    'means': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    'stds': [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01],
+    'resolution': 224,
+    'num_classes': num_classes,
+    'seed': 7133
+}
+
 if __name__ == '__main__':
     trainer = ImageClassifierTrainer(
         model_name=model_name,
         dataset_name=dataset_name,
+        dataset_stats=dataset_stats,
         num_classes=num_classes,
         annotation_path=annotation_path,
         log_path=log_path,
+        noise_signer_ops=noise_signer_ops,
         pretrained_path=pretrained_path,
         checkpoint_path=checkpoint_path,
         initialize=initialize

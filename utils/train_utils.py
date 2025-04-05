@@ -28,7 +28,7 @@ class MetricLogger:
             
     def log_lr(self, epoch: int, lr: float):
         with open(self.lr_path, 'a') as f:
-            f.write((f"{epoch},"
+            f.write((f"{epoch+1},"
                      f"{lr}\n"))
     
             

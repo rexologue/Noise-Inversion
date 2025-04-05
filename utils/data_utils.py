@@ -3,48 +3,22 @@ import torch
 import numpy as np
 import pandas as pd
 import multiprocessing
-from typing import Literal, Optional
+from typing import Literal
 
-import custom_augmentations as caugs
+import utils.custom_augmentations as caugs
+from utils.dataset import AnnotationDataset
 
 
-class AnnotationDataset(torch.utils.data.Dataset):
-    """
-    Класс датасета, в котором мы можем передавать трансформации для гибкой предобработки.
-    """
-    def __init__(self, 
-                 annot_path: str, 
-                 what_set: Literal['train', 'valid', 'test'],
-                 transform: Optional[caugs.Compose] = None):
-        
-        self.df = pd.read_parquet(annot_path)
-        self.df = self.df[self.df['set'] == what_set].reset_index(drop=True)
-        
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.df)
-
-    def __getitem__(self, idx: int):
-        row = self.df.iloc[idx]
-        image_path = row['path']
-        label = row['target']
-
-        # Read image (BGR)
-        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
-        # Recode BGR -> RGB
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-        # Apply augmentations
-        if self.transform is not None:
-            image = self.transform(image)
-
-        return image, torch.tensor(label, dtype=torch.long)
+STATS = {
+    'food101': {'mean': (0.5501, 0.4458, 0.3442), 'std': (0.2716, 0.275, 0.2796)},
+    'caltech256': {'mean': (0.519, 0.5009, 0.4713), 'std': (0.3138, 0.3093, 0.323)},
+    'stfd_dogs': {'mean': (0.4739, 0.4504, 0.3897), 'std': (0.2635, 0.2584, 0.2632)},
+    'imagenet': {'mean': (0.485, 0.456, 0.406), 'std': (0.229, 0.224, 0.225)},
+}
     
     
-def get_transform(dataset_name: Literal['food101', 'caltech256', 'stfd_dogs', 'imagenet'],
-                  what_set: Literal['train', 'valid', 'test'],
-                  apply_noise=False):
+def get_transform(what_stats: Literal['food101', 'caltech256', 'stfd_dogs', 'imagenet'],
+                  what_set: Literal['train', 'valid', 'test']):
     
     transform = [
         caugs.ToFloat()
@@ -58,13 +32,6 @@ def get_transform(dataset_name: Literal['food101', 'caltech256', 'stfd_dogs', 'i
             caugs.RandomHorizontalFlip(p=0.4),
             caugs.ColorJitter(p=1),
         ])
-        
-        if apply_noise:
-            transform.append(
-                caugs.AddNoise(
-                    means=(0.0, 0.0, 0.0), 
-                    stds=(0.05, 0.05, 0.05))
-            )
             
         if apply_rotate:
             transform.append(
@@ -73,99 +40,51 @@ def get_transform(dataset_name: Literal['food101', 'caltech256', 'stfd_dogs', 'i
     else:
         transform.append(caugs.Resize((224, 224)))
         
-    if dataset_name == 'food101':
-        transform.append(
-            caugs.Normalize(
-                mean=(0.5501089932025088, 0.44582025237541345, 0.3441710634123484), 
-                std=(0.27164285478597916, 0.27499079554664263, 0.27959281413337356)
-            )
-        )
-    elif dataset_name == 'caltech256':
-        transform.append(
-            caugs.Normalize(
-                mean=(0.5190556889334356, 0.5009477865715589, 0.4713000855634137), 
-                std=(0.3138144754552163, 0.30934961383632537, 0.3230348758074903)
-            )
-        )
-    elif dataset_name == 'stfd_dogs':
-        transform.append(
-            caugs.Normalize(
-                mean=(0.47398193043299136, 0.450399625963384, 0.3897051220477552), 
-                std=(0.26351997560497414, 0.258379534935184, 0.2632354039116452)
-            )
-        )
-    elif dataset_name == 'imagenet':
-        transform.append(
-            caugs.Normalize(
-                mean=(0.485, 0.456, 0.406), 
-                std=(0.229, 0.224, 0.225)
+    transform.append(
+        caugs.Normalize(
+            **STATS[what_stats]
         )
     )
-    else:
-        raise NotImplementedError(f'Can not work with {dataset_name} dataset')
         
     transform.append(
         caugs.ToTensor()
     )
         
     return caugs.Compose(transform)
-    
-    
-def get_food101_dataloader(annot_path: str,
-                           what_set: Literal['train', 'valid', 'test'],
-                           batch_size: int,
-                           apply_noise=False):
-    
-    dataset = AnnotationDataset(
-        annot_path=annot_path,
-        what_set=what_set,
-        transform=get_transform('imagenet', what_set, apply_noise)
-    )
-    
-    return torch.utils.data.DataLoader(
-        dataset=dataset,
-        batch_size=batch_size,
-        shuffle=(what_set == 'train'), 
-        num_workers=min(4, multiprocessing.cpu_count())
-    )
-    
-    
-def get_caltech256_dataloader(annot_path: str,
-                              what_set: Literal['train', 'valid', 'test'],
-                              batch_size: int,
-                              apply_noise=False):
+
+
+def get_dataloader(annot_path: str,
+                   dataset_name: Literal['food101', 'caltech256', 'stfd_dogs'],
+                   what_stats: Literal['food101', 'caltech256', 'stfd_dogs', 'imagenet'],
+                   what_set: Literal['train', 'valid', 'test'],
+                   batch_size: int,
+                   image_mix_prob: float = None,
+                   noise_prob: float = None
+):
     
     dataset = AnnotationDataset(
         annot_path=annot_path,
         what_set=what_set,
-        transform=get_transform('caltech256', what_set, apply_noise)
+        transform=get_transform(what_stats, what_set),
+        image_mix_prob=image_mix_prob,
+        noise_prob=noise_prob
     )
+
+    if dataset_name in ['caltech256', 'stfd_dogs'] and what_set == 'train':
+        sampler = build_upsampler(dataset.df)
+        shuffle = False
+    elif what_set == 'train':
+        sampler = None
+        shuffle = True
+    else:
+        sampler = None
+        shuffle = False
 
     return torch.utils.data.DataLoader(
         dataset=dataset,
         batch_size=batch_size,
-        sampler=build_upsampler(dataset.df) if (what_set == 'train') else None,
-        shuffle=False, 
-        num_workers=min(4, multiprocessing.cpu_count())
-    )
-    
-    
-def get_stfd_dogs_dataloader(annot_path: str,
-                             what_set: Literal['train', 'valid', 'test'],
-                             batch_size: int,
-                             apply_noise=False):
-    
-    dataset = AnnotationDataset(
-        annot_path=annot_path,
-        what_set=what_set,
-        transform=get_transform('stfd_dogs', what_set, apply_noise)
-    )
-
-    return torch.utils.data.DataLoader(
-        dataset=dataset,
-        batch_size=batch_size,
-        sampler=build_upsampler(dataset.df) if (what_set == 'train') else None,
-        shuffle=False, 
+        shuffle=shuffle,
+        sampler=sampler, 
         num_workers=min(4, multiprocessing.cpu_count())
     )
     

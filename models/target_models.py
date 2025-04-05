@@ -1,8 +1,8 @@
 import torch
 from typing import Literal
 
-from vgg import ClassifierVGG
-from resnet import ResNetClassifier, FaceEmbedder
+from models.vgg import ClassifierVGG
+from models.resnet import ResNetClassifier, FaceEmbedder
 
 def vgg16(num_classes: int, path_to_weights: str = None):
     model = ClassifierVGG(num_classes)

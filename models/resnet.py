@@ -7,7 +7,7 @@ from torch.nn import (Linear, Conv2d, BatchNorm1d, BatchNorm2d,
                       AvgPool2d, MaxPool2d, AdaptiveAvgPool2d, 
                       Sequential, Module) 
 
-from utils import Flatten, Normalize
+from models.utils import Flatten, Normalize
 
 
 class SEModule(Module):

@@ -1,6 +1,6 @@
 from torch.nn import Linear, Conv2d, BatchNorm2d, ReLU, MaxPool2d, Dropout, Sequential, Module
 
-from utils import Flatten
+from models.utils import Flatten
 
 class FeatureVGG(Module):
     def __init__(self):
