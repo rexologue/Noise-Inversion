@@ -199,31 +199,48 @@ class ImageClassifierTrainer:
                 ###########
 
                 # Check are there any images are chosen for noising
-                if torch.sum(noise_flags) > 0:
+                apply_noising = torch.sum(noise_flags) > 0
+
+                if apply_noising:
                     # Get noising and corresponding labels
                     noise_images, noise_labels = images[noise_flags], labels[noise_flags]
                     noise_images = self.noise_signer(noise_images, noise_labels)
-
-                # Otherwise use dummy tensors
-                else:
-                    noise_images = torch.empty_like(images[0].unsqueeze(0))
-                    noise_labels = torch.empty_like(labels[0].unsqueeze(0))
-                        
+          
                 ####################################
                 # DEFAULT AND NOISING FORWARD PASS #
                 ####################################
                 
                 # Define what images are not chosen for mixing or noising
                 default_mask = ~noise_flags & ~mix_flags
-                default_images, default_labels = images[default_mask], labels[default_mask]
 
-                # Concat them with noised images
-                cat_images = torch.cat((default_images, noise_images), dim=0)
-                cat_labels = torch.cat((default_labels, noise_labels), dim=0)
+                use_default = torch.sum(default_mask) > 0
+
+                # If default images are presented
+                if use_default:
+                    default_images, default_labels = images[default_mask], labels[default_mask]
+
+                    # Concat them with noised images if they are presented
+                    if apply_noising:
+                        cat_images = torch.cat((default_images, noise_images), dim=0)
+                        cat_labels = torch.cat((default_labels, noise_labels), dim=0)
+
+                    else:
+                        cat_images = default_images
+                        cat_labels = default_labels
+
+                # If there are no default images
+                else:
+                    # Left only noising images 
+                    if apply_noising:
+                        cat_images = noise_images
+                        cat_labels = noise_labels
 
                 # Feed this to the model and calculate the loss
-                cat_logits = self.model(cat_images)
-                cat_loss = criterion(cat_logits, cat_labels)  
+                if use_default or apply_noising:
+                    cat_logits = self.model(cat_images)
+                    cat_loss = criterion(cat_logits, cat_labels)  
+                else:
+                    cat_loss = 0
 
                 #################
                 # BACKWARD PASS #
@@ -240,8 +257,10 @@ class ImageClassifierTrainer:
                 ######################
 
                 collector['losses'].append(loss.item())
-                collector['preds'].extend(torch.argmax(cat_logits, dim=1).cpu().tolist())
-                collector['labels'].extend(cat_labels.cpu().tolist())
+
+                if use_default or apply_noising:
+                    collector['preds'].extend(torch.argmax(cat_logits, dim=1).cpu().tolist())
+                    collector['labels'].extend(cat_labels.cpu().tolist())
 
 
                 #########################################################################
