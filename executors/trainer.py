@@ -327,7 +327,7 @@ class ImageClassifierTrainer:
         collector = {'losses': [], 'labels': [], 'preds': []}
 
         with torch.no_grad():
-            for images, labels in valid_loader:
+            for images, labels, _, _ in valid_loader:
                 images, labels = images.to(device), labels.to(device)
                 
                 # Forward pass
