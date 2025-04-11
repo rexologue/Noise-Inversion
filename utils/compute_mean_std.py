@@ -7,8 +7,11 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-PATH_TO_ANNOTATION = '/home/super/mironov/mia/annotations/stfd_dogs_annotation.parquet'
-SAVE_PATH = '/home/super/mironov/mia/annotations/stfd_dogs_stats.txt'
+DATASET = ['food101', 'caltech256', 'stfd_dogs'][0]
+
+PATH_TO_ANNOTATION = f'../annotations/{DATASET}_annotation.parquet'
+SAVE_PATH = f'../annotations/{DATASET}_stats.txt'
+
 
 def compute_mean_std(image_paths: list[str]) -> tuple[tuple[float,float,float], tuple[float,float,float]]:
     """

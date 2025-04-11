@@ -23,7 +23,8 @@ torch.manual_seed(122)
 
 class ImageClassifierTrainer:
     def __init__(self, 
-                 model_name: Literal['resnet50', 'resnet101', 'resnet152', 'ir50', 'ir101', 'ir152', 'vgg16'],
+                 model_name: Literal['resnet50', 'resnet101', 'resnet152', 'ir50', 'ir101', 'ir152', 'vgg16', 
+                                     'efficientnet_v2_s', 'efficientnet_v2_m', 'efficientnet_v2_l'],
                  dataset_name: Literal['food101', 'caltech256', 'stfd_dogs'],
                  dataset_stats: Literal['food101', 'caltech256', 'stfd_dogs', 'imagenet'],
                  num_classes: int, 
@@ -31,22 +32,28 @@ class ImageClassifierTrainer:
                  annotation_path: str,
                  log_path: str,
                  pretrained_path: str = None,
-                 checkpoint_path: str = None,
-                 initialize=False):
+                 checkpoint_path: str = None):
         
         """Class for training image classifier model
 
         Args:
-            model_name (Literal[resnet50, resnet101, resnet152, ir50, ir101, ir152, vgg16]): What model use for training?
+            model_name (Literal[resnet50, resnet101, resnet152, ir50, ir101, ir152, vgg16, efficientnet_v2_s, efficientnet_v2_m, efficientnet_v2_l]): What model use for training?
+
             dataset_name (Literal[food101, caltech256, stfd_dogs]): What dataset use for training?
-            dataset_stats (Literal['food101', 'caltech256', 'stfd_dogs', 'imagenet']): What stats use for normalizing images?
+
+            dataset_stats (Literal[food101, caltech256, stfd_dogs, imagenet]): What stats use for normalizing images?
+
             num_classes (int): Amount of classes.
+
             noise_signer_ops (dict): NoiseSigner options.
+
             annotation_path (str): Path to dataset annotation.
+
             log_path (str): Path where to save metrics and checkpoints.
+
             pretrained_path (str, optional): Path of pretrained model's state dict. It is expected to consist of only the model weights. Defaults to None.
+
             checkpoint_path (str, optional): Path to checkpoint. It is possible to resume training form savings in that file. Defaults to False.
-            initialize (bool, optional): Should model be initialized? Defaults to False.
         """
         self.num_classes = num_classes
         self.checkpoint_path = checkpoint_path
@@ -63,9 +70,6 @@ class ImageClassifierTrainer:
         self.noise_signer = NoiseSigner(**noise_signer_ops)
         self.logger       = train_utils.MetricLogger(log_path)
         self.checkpointer = train_utils.Checkpointer(log_path)
-
-        if initialize:
-            self.model.apply(train_utils.init_model_weights)
                     
         if pretrained_path:
             self.model.load_state_dict(torch.load(pretrained_path, weights_only=False))

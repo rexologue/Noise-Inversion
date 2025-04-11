@@ -4,22 +4,21 @@
 
 from trainer import ImageClassifierTrainer
 
-model_name    = ['resnet50', 'resnet101', 'resnet152', 'ir50', 'ir101', 'ir152', 'vgg16'][0]
+model_name    = ['resnet50', 'resnet101', 'resnet152', 'ir50', 'ir101', 'ir152', 'vgg16', 'efficientnet_v2_s', 'efficientnet_v2_m', 'efficientnet_v2_l'][7]
 dataset_stats = ['food101', 'caltech256', 'stfd_dogs', 'imagenet'][3]
 dataset_name  = ['food101', 'caltech256', 'stfd_dogs'][0]
 
 num_classes  = {'food101': 101, 'caltech256': 257, 'stfd_dogs': 120}[dataset_name]
 
-annotation_path = '/home/duka/job/noise_inversion/annotations/Food101_annotation.parquet'
-pretrained_path = '/home/duka/job/noise_inversion/logs/resnet50_food101.pth'
-checkpoint_path = None
-initialize      = False
+annotation_path = f'../annotations/{dataset_name}_annotation.parquet'
+pretrained_path = f'../weights/pretrained_{model_name}_{num_classes}.pth'
+checkpoint_path = None # f'..logs/checkpoints/step_{}.pth'
 
 num_epochs      = 1000
 batch_size      = 256
 weight_decay    = 2e-5
 learning_rate   = 1e-4
-log_path        = '/home/duka/job/noise_inversion/logs'
+log_path        = '../logs'
 image_mix_prob  = 0.4
 noise_prob      = 0.2
 
@@ -49,8 +48,7 @@ if __name__ == '__main__':
         log_path=log_path,
         noise_signer_ops=noise_signer_ops,
         pretrained_path=pretrained_path,
-        checkpoint_path=checkpoint_path,
-        initialize=initialize
+        checkpoint_path=checkpoint_path
     )
     
     trainer.train(
