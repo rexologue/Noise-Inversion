@@ -232,7 +232,7 @@ class ImageClassifierTrainer:
                 # If mixing images are presented
                 if n_mixing_images > 0:
                     # Split logits
-                    logits_mix, default_and_noise_logits = concat_logits[n_mixing_images:], concat_logits[:n_mixing_images]
+                    logits_mix, default_and_noise_logits = concat_logits[:n_mixing_images], concat_logits[n_mixing_images:]
 
                     # Due to the fact that labels for mixing are one-hot encoded
                     # Compute CrossEntrophy natively
