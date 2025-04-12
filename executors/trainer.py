@@ -165,12 +165,14 @@ class ImageClassifierTrainer:
                 
                 # Start train step
 
-                #######################
-                # MIXING FORWARD PASS #
-                #######################
+                ##########
+                # MIXING #
+                ##########
+
+                n_mixing_images = torch.sum(mix_flags)
 
                 # Check are there any images are chosen for mixing
-                if torch.sum(mix_flags) > 0:
+                if n_mixing_images > 0:
                     # Get miximg images and corresponding labels
                     images_mix, labels_mix = images[mix_flags], labels[mix_flags]
                                 
@@ -181,73 +183,84 @@ class ImageClassifierTrainer:
                         images_mix, labels_mix = mix.mixup(images_mix, labels_mix, self.num_classes, device)
                     else:
                         images_mix, labels_mix = mix.cutmix(images_mix, labels_mix, self.num_classes, device)
-                        
-                    # Forward pass
-                    logits_mix = self.model(images_mix)
-                    
-                    # Due to the fact that labels are one-hot encoded
-                    # Compute CrossEntrophy natively
-                    log_probs = torch.nn.functional.log_softmax(logits_mix, dim=1)  
-                    mix_loss = -torch.mean(torch.sum(labels_mix * log_probs, dim=1))
 
-                # Otherwise disregard that component 
                 else:
-                    mix_loss = 0
-
+                    images_mix = torch.empty(0, device=device)
+                    labels_mix = torch.empty(0, device=device)
+                        
                 ###########
                 # NOISING #
                 ###########
 
                 # Check are there any images are chosen for noising
-                apply_noising = torch.sum(noise_flags) > 0
+                use_noising = noise_flags.any()
 
-                if apply_noising:
+                if use_noising:
                     # Get noising and corresponding labels
                     noise_images, noise_labels = images[noise_flags], labels[noise_flags]
                     noise_images = self.noise_signer(noise_images, noise_labels)
-          
-                ####################################
-                # DEFAULT AND NOISING FORWARD PASS #
-                ####################################
+
+                else:
+                    noise_images = torch.empty(0, device=device)
+                    noise_labels = torch.empty(0, device=device)
+                
+                ###########
+                # DEFAULT #
+                ###########
                 
                 # Define what images are not chosen for mixing or noising
                 default_mask = ~noise_flags & ~mix_flags
 
-                use_default = torch.sum(default_mask) > 0
+                use_default = default_mask.any()
 
                 # If default images are presented
                 if use_default:
                     default_images, default_labels = images[default_mask], labels[default_mask]
 
-                    # Concat them with noised images if they are presented
-                    if apply_noising:
-                        cat_images = torch.cat((default_images, noise_images), dim=0)
-                        cat_labels = torch.cat((default_labels, noise_labels), dim=0)
-
-                    else:
-                        cat_images = default_images
-                        cat_labels = default_labels
-
-                # If there are no default images
                 else:
-                    # Left only noising images 
-                    if apply_noising:
-                        cat_images = noise_images
-                        cat_labels = noise_labels
+                    default_images = torch.empty(0, device=device)
+                    default_labels = torch.empty(0, device=device)
+
+                ################
+                # FORWARD PASS #
+                ################
+
+                concat_logits = self.model(
+                    torch.cat((images_mix, default_images, noise_images), dim=0)
+                )
+
+                # If mixing images are presented
+                if n_mixing_images > 0:
+                    # Split logits
+                    logits_mix, default_and_noise_logits = concat_logits[n_mixing_images:], concat_logits[:n_mixing_images]
+
+                    # Due to the fact that labels for mixing are one-hot encoded
+                    # Compute CrossEntrophy natively
+                    log_probs = torch.nn.functional.log_softmax(logits_mix, dim=1)  
+                    mix_loss = -torch.mean(torch.sum(labels_mix * log_probs, dim=1))
+
+                # Otherwise assign all logits for default and noise
+                else:
+                    default_and_noise_logits = concat_logits
+                    mix_loss = 0
+
+                # Concat default and noise images for unify loss computation
+                default_and_noise_labels = torch.cat((default_labels, noise_labels), dim=0)
 
                 # Feed this to the model and calculate the loss
-                if use_default or apply_noising:
-                    cat_logits = self.model(cat_images)
-                    cat_loss = criterion(cat_logits, cat_labels)  
+                if use_default or use_noising:
+                    default_and_noise_loss = criterion(default_and_noise_logits, default_and_noise_labels)  
+                
+                # If there are no default ot noise images - assign 0 to corresponding loss
                 else:
-                    cat_loss = 0
+                    default_and_noise_loss = 0
 
                 #################
                 # BACKWARD PASS #
                 #################
 
                 # Combine loss
-                loss = mix_loss + cat_loss
+                loss = mix_loss + default_and_noise_loss
                     
                 loss.backward()
                 optimizer.step()
@@ -258,9 +271,9 @@ class ImageClassifierTrainer:
 
                 collector['losses'].append(loss.item())
 
-                if use_default or apply_noising:
-                    collector['preds'].extend(torch.argmax(cat_logits, dim=1).cpu().tolist())
-                    collector['labels'].extend(cat_labels.cpu().tolist())
+                if use_default or use_noising:
+                    collector['preds'].extend(torch.argmax(default_and_noise_logits, dim=1).cpu().tolist())
+                    collector['labels'].extend(default_and_noise_labels.cpu().tolist())
 
 
                 #########################################################################
